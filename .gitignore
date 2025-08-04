@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Local database
+data/budget.db
+
+# Environment / secrets
+.env
+*.env
+
+# VSCode settings
+.vscode/
+
+# Mac system files
+.DS_Store
+
+# Streamlit cache
+.streamlit/config.toml
+.streamlit/secrets.toml
+
+# Logs or temporary files
+*.log
+*.tmp
