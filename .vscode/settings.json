@@ -1,3 +1,4 @@
 {
-    "python.pythonPath": "/Users/tungpham/budget/venv/bin/python3.12"
+    "python.pythonPath": "/Users/tungpham/budget/venv/bin/python3.12",
+    "git.ignoreLimitWarning": true
 }
