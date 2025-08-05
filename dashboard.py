@@ -28,7 +28,6 @@ def check_password():
         st.stop()
 check_password()
 
-# --- Initialize Database Tables ---
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -58,7 +57,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- Load Data ---
 def load_transactions():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM transactions", conn)
@@ -84,7 +82,6 @@ def save_tag(name, color):
     conn.commit()
     conn.close()
 
-
 def update_transaction(id, date, category, description, amount, type_):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -103,11 +100,10 @@ def delete_transaction(id):
     conn.commit()
     conn.close()
 
-# --- Page Setup ---
+# page setup
 st.set_page_config(page_title="tpbt", layout="wide")
 st.title("tp budget tracker")
-
-# --- Init DB and Tags ---
+# init db and tags
 if not os.path.exists(DB_PATH):
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 init_db()
@@ -130,16 +126,16 @@ df = load_transactions()
 df['date'] = pd.to_datetime(df['date'])
 df['month'] = df['date'].dt.to_period('M').astype(str)
 
-# --- Tabs ---
+# all tabs
 tab0, tab1, tab2, tab3 = st.tabs(["overview", "transactions", "budget", "database"])
 
-# === TAB 0 ===
+# overview
 with tab0:
     st.subheader("monthly overview")
     if df.empty:
         st.warning("no transactions found.")
     else:
-        # Pull unique months from both transactions and budgets for a complete view
+        # pull unique months from both transactions and budgets for a complete view
         conn = sqlite3.connect(DB_PATH)
         transaction_months = pd.read_sql_query("SELECT DISTINCT strftime('%Y-%m', date) AS month FROM transactions", conn)
         budget_months = pd.read_sql_query("SELECT DISTINCT month FROM budgets", conn)
@@ -149,6 +145,7 @@ with tab0:
 
         month_data = df[df['month'] == selected_month]
 
+        # summary of finance
         income = month_data[month_data['type'] == 'income']['amount'].sum()
         expenses = month_data[month_data['type'] == 'expense']['amount'].sum()
         net_left = income - expenses
@@ -158,17 +155,16 @@ with tab0:
         col2.metric("how much i've spent", f"${expenses:,.2f}")
         col3.metric("how much i have left", f"${net_left:,.2f}", delta=f"{net_left:,.2f}")
 
-        # Budget Progress by Category
+        # budget progress
         st.subheader("budget progress")
         budget_df = load_budget(selected_month)
 
         if budget_df.empty:
             st.info("no budget set for this month.")
         else:
-            # Aggregate duplicate budgets
+            # aggregate duplicate budgets
             budget_df = budget_df.groupby('category', as_index=False)['budgeted_amount'].sum()
-
-            # Compute actuals from transactions
+            # compute actuals from transactions
             actuals = (
                 month_data[month_data['type'].str.lower() == 'expense']
                 .groupby('category')['amount']
@@ -211,6 +207,7 @@ with tab0:
                 st.markdown(label, unsafe_allow_html=True)
                 st.progress(percent_spent)
 
+        # expense breakdown
         st.subheader("expense breakdown")
         breakdown = (
             month_data[month_data['type'] == 'expense']
@@ -230,7 +227,7 @@ with tab0:
         else:
             st.info("no expenses recorded for this month.")
 
-# === TAB 1 ===
+# transactions
 with tab1:
     st.subheader("add new transaction")
     with st.form("add_transaction_form"):
@@ -337,16 +334,14 @@ with tab1:
             unsafe_allow_html=True
         )
 
-# ====================
-# === TAB 2: BUDGETS ===
-# ====================
+# budget
 with tab2:
     st.subheader("monthly budget")
 
     with st.form("add_budget_form"):
         col1, col2 = st.columns(2)
         now = datetime.datetime.now()
-        years = list(range(now.year - 10, now.year + 3))  # Customize range as needed
+        years = list(range(now.year - 10, now.year + 3))
         months = [f"{i:02d}" for i in range(1, 13)]
 
         selected_year = col1.selectbox("Year", options=years, index=years.index(now.year))
@@ -372,7 +367,7 @@ with tab2:
     if df.empty:
         st.info("no transaction data available to compare with budgets.")
     else:
-        # Get available months from the budgets table
+        # get available months from the budgets table
         conn = sqlite3.connect(DB_PATH)
         budget_months = pd.read_sql_query("SELECT DISTINCT month FROM budgets", conn)['month'].sort_values(ascending=False).tolist()
         conn.close()
@@ -382,13 +377,13 @@ with tab2:
         if budget_df.empty:
             st.info("no budget set for this month.")
         else:
-            # --- Aggregate Budgets by Category ---
+            # aggregate budgets by category
             budget_df = (
                 budget_df.groupby('category', as_index=False)['budgeted_amount']
                 .sum()
             )
 
-            # --- Actual Spending for Month ---
+            # actual spending for the month
             filtered = df[df['month'] == month_selected]
             actuals = (
                 filtered[filtered['type'].str.lower() == 'expense']
@@ -398,14 +393,14 @@ with tab2:
                 .rename(columns={'amount': 'actual_spent'})
             )
 
-            # --- Merge and Fill ---
+            # merge and fill
             merged = pd.merge(budget_df, actuals, on='category', how='left')
             merged['actual_spent'] = merged['actual_spent'].fillna(0)
             merged['difference'] = merged['budgeted_amount'] - merged['actual_spent']
 
             st.subheader(f"budget vs actual – {month_selected}")
 
-            # --- Bar Chart Visualization ---
+            # bar chart
             chart_df = merged.melt(id_vars='category', value_vars=['budgeted_amount', 'actual_spent'],
                                 var_name='Type', value_name='Amount')
 
@@ -421,25 +416,25 @@ with tab2:
 
             st.altair_chart(bar, use_container_width=True)
 
-            # Optional: Keep table for clarity
+            # table for clarity
             with st.expander("show budget vs actual table"):
                 st.dataframe(merged[['category', 'budgeted_amount', 'actual_spent', 'difference']])
 
+# database management
 with tab3:
     st.subheader("database management")
 
     table_selection = st.selectbox("select database", ["transactions", "budgets", "tags"])
 
-    # --- Helper functions ---
     def get_table_data(name):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # Get list of column names in the table
+        # get list of column names in the table
         cursor.execute(f"PRAGMA table_info({name})")
         columns = [col[1] for col in cursor.fetchall()]
 
-        # If 'id' column exists, just use it; otherwise, alias rowid as id
+        # if 'id' column exists, just use it; otherwise, alias rowid as id
         if "id" in columns:
             query = f"SELECT * FROM {name}"
         else:
@@ -483,7 +478,7 @@ with tab3:
     if df.empty:
         st.info("No data to display.")
     else:
-        # Show column headers
+        # show column headers
         header_cols = st.columns(len(df.columns) + 1)
         for i, col_name in enumerate(df.columns):
             header_cols[i].markdown(f"**{col_name}**")
@@ -491,7 +486,7 @@ with tab3:
         for _, row in df.iterrows():
             with st.container():
                 cols = st.columns(len(row) + 1)  # show all columns + action buttons
-                for i, col in enumerate(row.index):  # skip ID column
+                for i, col in enumerate(row.index):
                     cols[i].write(row[col])
 
                 edit_key = f"edit_{table_selection}_{row['id']}"
@@ -505,7 +500,7 @@ with tab3:
                     st.session_state["delete_target"] = (table_selection, row['id'])
                     st.rerun()
 
-    # --- Edit Handler ---
+    # edit button handler
     if st.session_state.get("edit_target"):
         table, edit_id = st.session_state["edit_target"]
         edit_df = get_table_data(table)
@@ -543,7 +538,7 @@ with tab3:
                 st.session_state.pop("edit_target")
                 st.rerun()
 
-    # --- Delete Handler ---
+    # delete button handler
     if st.session_state.get("delete_target"):
         table, delete_id = st.session_state["delete_target"]
         st.warning(f"are you sure you want to delete this row from `{table}`?")
